@@ -534,8 +534,51 @@ end
     #end
 end
 
+@testset "test sdp opf with constraint decomposition" begin
+    @testset "3-bus case" begin
+        result = run_opf("../test/data/matpower/case3.m", SDPDecompPowerModel, scs_solver)
 
+        @test result["status"] == :Optimal
+        @test isapprox(result["objective"], 5851.3; atol = 1e0)
+    end
+    @testset "5-bus with asymmetric line charge" begin
+        result = run_opf("../test/data/pti/case5_alc.raw", SDPDecompPowerModel, scs_solver)
 
+        @test result["status"] == :Optimal
+        @test isapprox(result["objective"], 1005.31; atol = 1e-1)
+    end
+    @testset "14-bus case" begin
+        result = run_opf("../test/data/matpower/case14.m", SDPDecompPowerModel, scs_solver)
+
+        @test result["status"] == :Optimal
+        @test isapprox(result["objective"], 8079.97; atol = 1e0)
+    end
+    @testset "6-bus case" begin
+        result = run_opf("../test/data/matpower/case6.m", SDPDecompPowerModel, scs_solver)
+
+        @test result["status"] == :Optimal
+        @test isapprox(result["objective"], 11558.5; atol = 1e0)
+    end
+    @testset "passing in decomposition" begin
+        PMs = PowerModels
+        data = PMs.parse_file("../test/data/matpower/case14.m")
+        pm = GenericPowerModel(data, SDPDecompForm)
+
+        cadj, lookup_index = PMs.chordal_extension(pm)
+        cliques = PMs.maximal_cliques(cadj)
+        lookup_bus_index = map(reverse, lookup_index)
+        groups = [[lookup_bus_index[gi] for gi in g] for g in cliques]
+        @test PMs.problem_size(groups) == 344
+
+        pm.ext[:SDconstraintDecomposition] = PMs.SDconstraintDecomposition(groups, cadj, lookup_index)
+
+        PMs.post_opf(pm)
+        result = solve_generic_model(pm, scs_solver; solution_builder=PMs.get_solution)
+
+        @test result["status"] == :Optimal
+        @test isapprox(result["objective"], 8079.97; atol = 1e0)
+    end
+end
 
 @testset "test ac v+t polar opf" begin
     PMs = PowerModels
