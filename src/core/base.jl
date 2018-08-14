@@ -232,6 +232,19 @@ function solve_generic_model(pm::GenericPowerModel, solver; solution_builder = g
     return build_solution(pm, status, solve_time; solution_builder = solution_builder)
 end
 
+function solve_generic_model(pm::GenericPowerModel{T}, solver; solution_builder=get_solution, scale_factor=1e-5) where T <: AbstractConicForms
+    setsolver(pm.model, solver)
+
+    obj = pm.model.obj
+    @objective(pm.model, Min, scale_factor*obj)
+    status, solve_time = solve(pm)
+
+    result = build_solution(pm, status, solve_time; solution_builder = solution_builder)
+    result["objective"] /= scale_factor
+    result["objective_lb"] /= scale_factor
+    return result
+end
+
 """
 Returns a dict that stores commonly used pre-computed data from of the data dictionary,
 primarily for converting data-types, filtering out deactivated components, and storing
