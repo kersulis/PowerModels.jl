@@ -9,11 +9,42 @@ abstract type AbstractWRMForm <: AbstractConicPowerFormulation end
 ""
 abstract type SDPWRMForm <: AbstractWRMForm end
 
-""
-abstract type SDPDecompForm <: AbstractWRMForm end
+"""
+Semi-definite relaxation of AC OPF
 
-""
+Originally proposed by:
+```
+@article{BAI2008383,
+title = "Semidefinite programming for optimal power flow problems",
+journal = "International Journal of Electrical Power & Energy Systems",
+volume = "30",
+number = "6",
+pages = "383 - 392",
+year = "2008",
+issn = "0142-0615",
+doi = "https://doi.org/10.1016/j.ijepes.2007.12.003",
+url = "http://www.sciencedirect.com/science/article/pii/S0142061507001378",
+author = "Xiaoqing Bai and Hua Wei and Katsuki Fujisawa and Yong Wang",
+}
+```
+First paper to use "W" variables in the BIM of AC OPF:
+```@INPROCEEDINGS{6345272,
+author={S. Sojoudi and J. Lavaei},
+booktitle={2012 IEEE Power and Energy Society General Meeting},
+title={Physics of power networks makes hard optimization problems easy to solve},
+year={2012},
+volume={},
+number={},
+pages={1-8},
+doi={10.1109/PESGM.2012.6345272},
+ISSN={1932-5517},
+month={July},}
+```
+"""
 const SDPWRMPowerModel = GenericPowerModel{SDPWRMForm}
+
+
+abstract type SDPDecompForm <: SDPWRMForm end
 
 ""
 const SDPDecompPowerModel = GenericPowerModel{SDPDecompForm}
@@ -21,8 +52,6 @@ const SDPDecompPowerModel = GenericPowerModel{SDPDecompForm}
 struct SDconstraintDecomposition
     "Each sub-vector consists of bus IDs corresponding to a clique grouping"
     decomp::Vector{Vector{Int64}}
-    "Adjacency matrix of chordal graph extension"
-    cadj::SparseMatrixCSC{Int64, Int64}
     "`lookup_index[bus_id] --> idx` for mapping between 1:n and bus indices"
     lookup_index::Dict
     "A chordal extension and maximal cliques are uniquely determined by a graph ordering"
@@ -202,7 +231,7 @@ function variable_voltage(pm::GenericPowerModel{SDPDecompForm}; nw::Int=pm.cnw, 
         groups = maximal_cliques(cadj)
         lookup_bus_index = map(reverse, lookup_index)
         groups = [[lookup_bus_index[gi] for gi in g] for g in groups]
-        pm.ext[:SDconstraintDecomposition] = SDconstraintDecomposition(groups, cadj, lookup_index, ordering)
+        pm.ext[:SDconstraintDecomposition] = SDconstraintDecomposition(groups, lookup_index, ordering)
     end
 
     voltage_product_groups =
@@ -310,10 +339,11 @@ function constraint_voltage(pm::GenericPowerModel{SDPDecompForm}, nw::Int, cnd::
             wr_jj = WR[2, 2]
             wr_ij = WR[1, 2]
             wi_ij = WI[1, 2]
+            wi_ji = WI[2, 1]
 
             # standard SOC form (Mosek doesn't like rotated form)
-            @constraint(pm.model, (wr_ii + wr_jj)/2 >= norm([(wr_ii - wr_jj)/2; wr_ij; wi_ij]))
-            # @constraint(pm.model, (wr_ii + wr_jj) >= norm([(wr_ii - wr_jj); 2*wr_ij; 2*wi_ij]))
+            @constraint(pm.model, (wr_ii + wr_jj) >= norm([(wr_ii - wr_jj); 2*wr_ij; 2*wi_ij]))
+            @constraint(pm.model, wi_ij == -wi_ji)
         else
             @SDconstraint(pm.model, [WR WI; -WI WR] >= 0)
         end
