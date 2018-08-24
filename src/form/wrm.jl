@@ -145,7 +145,7 @@ function constraint_voltage(pm::GenericPowerModel{SDPNaiveForm}, nw::Int, cnd::I
     WR = var(pm, nw, cnd)[:WR]
     WI = var(pm, nw, cnd)[:WI]
 
-    cadj, lookup_index = chordal_extension(pm)
+    cadj, lookup_index, σ = chordal_extension(pm)
     cliques = maximal_cliques(cadj)
     clique_grouping = greedy_merge(cliques)
     for group in clique_grouping
